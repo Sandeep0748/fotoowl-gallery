@@ -12,6 +12,7 @@ const ImageModal = ({ image, onClose }) => {
   const [reactionFeedback, setReactionFeedback] = useState(null);
   const [isCommentSubmitting, setIsCommentSubmitting] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState(getConnectionStatus());
+  const [forceRefetch, setForceRefetch] = useState(0);
 
   const reactionLock = useRef(false);
   const imageId = String(image.id);
@@ -21,6 +22,19 @@ const ImageModal = ({ image, onClose }) => {
     const unsubscribe = subscribeToConnectionStatus(setConnectionStatus);
     return unsubscribe;
   }, []);
+
+  // Aggressive polling fallback when offline
+  useEffect(() => {
+    if (connectionStatus === 'disconnected') {
+      console.log("ImageModal: Connection offline, setting up aggressive polling");
+      const interval = setInterval(() => {
+        console.log("ImageModal: Aggressive polling - forcing refetch");
+        setForceRefetch(prev => prev + 1);
+      }, 1500); // Poll every 1.5 seconds when offline
+
+      return () => clearInterval(interval);
+    }
+  }, [connectionStatus]);
 
   /* -------------------- QUERY -------------------- */
   const { data, isLoading } = db.useQuery({
@@ -34,8 +48,10 @@ const ImageModal = ({ image, onClose }) => {
     },
     feed: {},
   }, {
-    // Aggressive polling when disconnected to ensure updates are seen
-    refetchInterval: connectionStatus === 'connected' ? 15000 : 3000,
+    // Very aggressive polling when disconnected to ensure updates are seen
+    refetchInterval: connectionStatus === 'connected' ? 5000 : 1000, // 1 second polling when offline
+    // Add forceRefetch to query key to force refetch when needed
+    queryKey: ['instantdb', 'image-modal', imageId, forceRefetch],
   });
 
   const reactions = useMemo(() => data?.reactions || [], [data]);
@@ -120,6 +136,7 @@ const ImageModal = ({ image, onClose }) => {
 
           setReactionFeedback({ emoji, action: "removed" });
           // Trigger global refresh to update feed immediately
+          console.log("ImageModal: Removed reaction, triggering global refresh");
           triggerGlobalRefresh();
           return;
         }
@@ -149,6 +166,7 @@ const ImageModal = ({ image, onClose }) => {
 
         setReactionFeedback({ emoji, action: "added" });
         // Trigger global refresh to update feed immediately
+        console.log("ImageModal: Added reaction, triggering global refresh");
         triggerGlobalRefresh();
       } catch (err) {
         console.error("Reaction error:", err);
@@ -208,6 +226,7 @@ const ImageModal = ({ image, onClose }) => {
         }),
       ]);
       // Trigger global refresh to update feed immediately
+      console.log("ImageModal: Added comment, triggering global refresh");
       triggerGlobalRefresh();
     } finally {
       setIsCommentSubmitting(false);
@@ -227,6 +246,7 @@ const ImageModal = ({ image, onClose }) => {
 
     await db.transact(deletes);
     // Trigger global refresh to update feed immediately
+    console.log("ImageModal: Deleted comment, triggering global refresh");
     triggerGlobalRefresh();
   };
 

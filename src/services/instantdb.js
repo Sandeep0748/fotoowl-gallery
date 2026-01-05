@@ -90,8 +90,14 @@ const startHeartbeat = () => {
 let refreshListeners = new Set();
 
 export const triggerGlobalRefresh = () => {
-  console.log("Triggering global refresh due to user action");
-  refreshListeners.forEach(callback => callback());
+  console.log("🔄 Global refresh triggered - notifying", refreshListeners.size, "listeners");
+  refreshListeners.forEach(callback => {
+    try {
+      callback();
+    } catch (error) {
+      console.error("Error in refresh listener:", error);
+    }
+  });
 };
 
 export const subscribeToGlobalRefresh = (callback) => {

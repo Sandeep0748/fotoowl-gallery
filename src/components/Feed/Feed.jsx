@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { db, markActivity, getConnectionStatus, subscribeToConnectionStatus, subscribeToGlobalRefresh } from "../../services/instantdb";
 import { getUserColor } from "../../utils/userColors";
 import { fetchImages } from "../../services/unsplash";
@@ -11,6 +11,7 @@ const Feed = () => {
   const [connectionStatus, setConnectionStatus] = useState(getConnectionStatus());
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const previousItemsRef = useRef([]);
+  const queryClient = useQueryClient();
 
   // Monitor connection status
   useEffect(() => {
@@ -18,14 +19,18 @@ const Feed = () => {
     return unsubscribe;
   }, []);
 
-  // Listen for global refresh triggers
+  // Aggressive polling fallback when offline
   useEffect(() => {
-    const unsubscribe = subscribeToGlobalRefresh(() => {
-      console.log("Feed: Received global refresh trigger");
-      setRefreshTrigger(prev => prev + 1);
-    });
-    return unsubscribe;
-  }, []);
+    if (connectionStatus === 'disconnected') {
+      console.log("Feed: Connection offline, setting up aggressive polling");
+      const interval = setInterval(() => {
+        console.log("Feed: Aggressive polling - invalidating queries");
+        queryClient.invalidateQueries({ queryKey: ['instantdb'] });
+      }, 2000); // Poll every 2 seconds when offline
+
+      return () => clearInterval(interval);
+    }
+  }, [connectionStatus, queryClient]);
 
   /* -------------------- REAL-TIME FEED -------------------- */
   const { data, isLoading } = db.useQuery({
@@ -37,19 +42,14 @@ const Feed = () => {
     },
   }, {
     // Very aggressive polling when disconnected to ensure updates are seen
-    refetchInterval: connectionStatus === 'connected' ? 15000 : 2000,
+    refetchInterval: connectionStatus === 'connected' ? 10000 : 1000, // 1 second polling when offline
     // Force refresh when triggered
     refetchIntervalInBackground: false,
+    // Add timestamp to query key to force refetch on actions
+    queryKey: ['instantdb', 'feed', refreshTrigger],
   });
 
-  // Force query refresh when refreshTrigger changes
-  const feedItems = useMemo(() => {
-    if (refreshTrigger) {
-      // This will trigger a re-render and potentially a refetch
-      console.log("Feed: Refresh triggered, invalidating query");
-    }
-    return data?.feed || [];
-  }, [data, refreshTrigger]);
+  const feedItems = useMemo(() => data?.feed || [], [data]);
 
   // Detect new items and animate them
   useEffect(() => {
@@ -163,21 +163,23 @@ const Feed = () => {
                connectionStatus === 'connecting' ? 'Connecting...' :
                'Offline'}
             </span>
+            <button
+              onClick={() => {
+                console.log("Manual refresh triggered");
+                queryClient.invalidateQueries({ queryKey: ['instantdb', 'feed'] });
+              }}
+              className="text-xs bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600"
+              title="Refresh feed manually"
+            >
+              ↻
+            </button>
             {connectionStatus === 'disconnected' && (
-              <>
-                <button
-                  onClick={() => setRefreshTrigger(prev => prev + 1)}
-                  className="text-xs bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600"
-                >
-                  Refresh Feed
-                </button>
-                <button
-                  onClick={() => window.location.reload()}
-                  className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
-                >
-                  Reload Page
-                </button>
-              </>
+              <button
+                onClick={() => window.location.reload()}
+                className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
+              >
+                Reload Page
+              </button>
             )}
           </div>
         </div>
