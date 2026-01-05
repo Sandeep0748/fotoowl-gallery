@@ -1,8 +1,8 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useCallback } from "react";
 import { fetchImages } from "../../services/unsplash";
-// import ImageCard from "../Gallery/ImageCard";
-import ImageCard from "../Gallery/IMageCard";
+import ImageCard from "../Gallery/ImageCard";
+// import ImageCard from "../Gallery/IMageCard";
 import ImageModal from "./ImageModal";
 import { useUserStore } from "../../store/userStore";
 
