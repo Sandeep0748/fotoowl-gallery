@@ -12,7 +12,6 @@ const ImageModal = ({ image, onClose }) => {
   const [reactionFeedback, setReactionFeedback] = useState(null);
   const [isCommentSubmitting, setIsCommentSubmitting] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState(getConnectionStatus());
-  const [forceRefetch, setForceRefetch] = useState(0);
 
   const reactionLock = useRef(false);
   const imageId = String(image.id);
@@ -22,19 +21,6 @@ const ImageModal = ({ image, onClose }) => {
     const unsubscribe = subscribeToConnectionStatus(setConnectionStatus);
     return unsubscribe;
   }, []);
-
-  // Aggressive polling fallback when offline
-  useEffect(() => {
-    if (connectionStatus === 'disconnected') {
-      console.log("ImageModal: Connection offline, setting up ultra-aggressive polling");
-      const interval = setInterval(() => {
-        console.log("ImageModal: Ultra-aggressive polling - forcing refetch");
-        setForceRefetch(prev => prev + 1);
-      }, 500); // Poll every 0.5 seconds when offline
-
-      return () => clearInterval(interval);
-    }
-  }, [connectionStatus]);
 
   /* -------------------- QUERY -------------------- */
   const { data, isLoading } = db.useQuery({
@@ -47,11 +33,6 @@ const ImageModal = ({ image, onClose }) => {
       $: { order: { createdAt: "asc" } },
     },
     feed: {},
-  }, {
-    // Very aggressive polling when disconnected to ensure updates are seen
-    refetchInterval: connectionStatus === 'connected' ? 5000 : 1000, // 1 second polling when offline
-    // Add forceRefetch to query key to force refetch when needed
-    queryKey: ['instantdb', 'image-modal', imageId, forceRefetch],
   });
 
   const reactions = useMemo(() => data?.reactions || [], [data]);
@@ -199,6 +180,8 @@ const ImageModal = ({ image, onClose }) => {
     const text = commentText.trim();
     const now = Date.now();
     const tempId = `temp-${now}`;
+    const commentId = id();
+    const feedId = id();
 
     setOptimisticComments((p) => [
       ...p,
