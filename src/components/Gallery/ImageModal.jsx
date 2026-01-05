@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { db, id, markActivity, getConnectionStatus, subscribeToConnectionStatus } from "../../services/instantdb";
+import { db, id, markActivity, getConnectionStatus, subscribeToConnectionStatus, triggerGlobalRefresh } from "../../services/instantdb";
 import { useUserStore } from "../../store/userStore";
 import EmojiPicker from "../EmojiPicker/EmojiPicker";
 import { getUserColor } from "../../utils/userColors";
@@ -33,6 +33,9 @@ const ImageModal = ({ image, onClose }) => {
       $: { order: { createdAt: "asc" } },
     },
     feed: {},
+  }, {
+    // Aggressive polling when disconnected to ensure updates are seen
+    refetchInterval: connectionStatus === 'connected' ? 15000 : 3000,
   });
 
   const reactions = useMemo(() => data?.reactions || [], [data]);
@@ -116,6 +119,8 @@ const ImageModal = ({ image, onClose }) => {
           ]);
 
           setReactionFeedback({ emoji, action: "removed" });
+          // Trigger global refresh to update feed immediately
+          triggerGlobalRefresh();
           return;
         }
 
@@ -143,6 +148,8 @@ const ImageModal = ({ image, onClose }) => {
         ]);
 
         setReactionFeedback({ emoji, action: "added" });
+        // Trigger global refresh to update feed immediately
+        triggerGlobalRefresh();
       } catch (err) {
         console.error("Reaction error:", err);
         setReactionFeedback({ emoji, action: "error" });
@@ -200,6 +207,8 @@ const ImageModal = ({ image, onClose }) => {
           createdAt: now,
         }),
       ]);
+      // Trigger global refresh to update feed immediately
+      triggerGlobalRefresh();
     } finally {
       setIsCommentSubmitting(false);
     }
@@ -217,6 +226,8 @@ const ImageModal = ({ image, onClose }) => {
     }
 
     await db.transact(deletes);
+    // Trigger global refresh to update feed immediately
+    triggerGlobalRefresh();
   };
 
   /* -------------------- ESC KEY -------------------- */

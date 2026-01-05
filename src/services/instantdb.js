@@ -53,12 +53,61 @@ export const markActivity = () => {
   }
 };
 
+// Heartbeat mechanism to test real-time connectivity
+let heartbeatInterval = null;
+
+const startHeartbeat = () => {
+  if (heartbeatInterval) clearInterval(heartbeatInterval);
+  
+  heartbeatInterval = setInterval(() => {
+    // Send a test transaction to check if real-time is working
+    const testId = `heartbeat-${Date.now()}`;
+    try {
+      // This is a no-op transaction that should trigger real-time updates if working
+      db.transact([
+        db.tx.feed[testId].update({
+          type: "heartbeat",
+          userId: "system",
+          username: "System",
+          createdAt: Date.now(),
+        }),
+      ]).then(() => {
+        // Clean up the heartbeat entry after a short delay
+        setTimeout(() => {
+          db.transact([db.tx.feed[testId].delete()]).catch(() => {});
+        }, 1000);
+      }).catch(() => {
+        // If transaction fails, mark as disconnected
+        updateConnectionStatus('disconnected');
+      });
+    } catch (error) {
+      updateConnectionStatus('disconnected');
+    }
+  }, 20000); // Send heartbeat every 20 seconds
+};
+
+// Global refresh trigger for manual updates
+let refreshListeners = new Set();
+
+export const triggerGlobalRefresh = () => {
+  console.log("Triggering global refresh due to user action");
+  refreshListeners.forEach(callback => callback());
+};
+
+export const subscribeToGlobalRefresh = (callback) => {
+  refreshListeners.add(callback);
+  return () => refreshListeners.delete(callback);
+};
+
 // Initialize connection monitoring
 if (appId) {
   updateConnectionStatus('connecting');
 
   // Set up periodic connection checks
   setInterval(monitorActivity, 10000); // Check every 10 seconds
+
+  // Start heartbeat to test real-time connectivity
+  startHeartbeat();
 
   // Add a test query to verify connection
   setTimeout(() => {

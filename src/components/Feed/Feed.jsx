@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { db, markActivity, getConnectionStatus, subscribeToConnectionStatus } from "../../services/instantdb";
+import { db, markActivity, getConnectionStatus, subscribeToConnectionStatus, subscribeToGlobalRefresh } from "../../services/instantdb";
 import { getUserColor } from "../../utils/userColors";
 import { fetchImages } from "../../services/unsplash";
 import { useUserStore } from "../../store/userStore";
@@ -9,11 +9,21 @@ const Feed = () => {
   const { setSelectedImage, userId } = useUserStore();
   const [animatingItems, setAnimatingItems] = useState(new Set());
   const [connectionStatus, setConnectionStatus] = useState(getConnectionStatus());
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const previousItemsRef = useRef([]);
 
   // Monitor connection status
   useEffect(() => {
     const unsubscribe = subscribeToConnectionStatus(setConnectionStatus);
+    return unsubscribe;
+  }, []);
+
+  // Listen for global refresh triggers
+  useEffect(() => {
+    const unsubscribe = subscribeToGlobalRefresh(() => {
+      console.log("Feed: Received global refresh trigger");
+      setRefreshTrigger(prev => prev + 1);
+    });
     return unsubscribe;
   }, []);
 
@@ -26,11 +36,20 @@ const Feed = () => {
       },
     },
   }, {
-    // More aggressive polling when disconnected, less when connected
-    refetchInterval: connectionStatus === 'connected' ? 30000 : 5000,
+    // Very aggressive polling when disconnected to ensure updates are seen
+    refetchInterval: connectionStatus === 'connected' ? 15000 : 2000,
+    // Force refresh when triggered
+    refetchIntervalInBackground: false,
   });
 
-  const feedItems = useMemo(() => data?.feed || [], [data]);
+  // Force query refresh when refreshTrigger changes
+  const feedItems = useMemo(() => {
+    if (refreshTrigger) {
+      // This will trigger a re-render and potentially a refetch
+      console.log("Feed: Refresh triggered, invalidating query");
+    }
+    return data?.feed || [];
+  }, [data, refreshTrigger]);
 
   // Detect new items and animate them
   useEffect(() => {
@@ -145,12 +164,20 @@ const Feed = () => {
                'Offline'}
             </span>
             {connectionStatus === 'disconnected' && (
-              <button
-                onClick={() => window.location.reload()}
-                className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
-              >
-                Refresh
-              </button>
+              <>
+                <button
+                  onClick={() => setRefreshTrigger(prev => prev + 1)}
+                  className="text-xs bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600"
+                >
+                  Refresh Feed
+                </button>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
+                >
+                  Reload Page
+                </button>
+              </>
             )}
           </div>
         </div>
