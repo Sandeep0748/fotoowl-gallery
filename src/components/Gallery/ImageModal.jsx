@@ -26,11 +26,11 @@ const ImageModal = ({ image, onClose }) => {
   // Aggressive polling fallback when offline
   useEffect(() => {
     if (connectionStatus === 'disconnected') {
-      console.log("ImageModal: Connection offline, setting up aggressive polling");
+      console.log("ImageModal: Connection offline, setting up ultra-aggressive polling");
       const interval = setInterval(() => {
-        console.log("ImageModal: Aggressive polling - forcing refetch");
+        console.log("ImageModal: Ultra-aggressive polling - forcing refetch");
         setForceRefetch(prev => prev + 1);
-      }, 1500); // Poll every 1.5 seconds when offline
+      }, 500); // Poll every 0.5 seconds when offline
 
       return () => clearInterval(interval);
     }
@@ -138,6 +138,12 @@ const ImageModal = ({ image, onClose }) => {
           // Trigger global refresh to update feed immediately
           console.log("ImageModal: Removed reaction, triggering global refresh");
           triggerGlobalRefresh();
+          // Also trigger storage event as backup
+          localStorage.setItem('feed-refresh', Date.now().toString());
+          window.dispatchEvent(new StorageEvent('storage', {
+            key: 'feed-refresh',
+            newValue: Date.now().toString()
+          }));
           return;
         }
 
@@ -168,6 +174,12 @@ const ImageModal = ({ image, onClose }) => {
         // Trigger global refresh to update feed immediately
         console.log("ImageModal: Added reaction, triggering global refresh");
         triggerGlobalRefresh();
+        // Also trigger storage event as backup
+        localStorage.setItem('feed-refresh', Date.now().toString());
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: 'feed-refresh',
+          newValue: Date.now().toString()
+        }));
       } catch (err) {
         console.error("Reaction error:", err);
         setReactionFeedback({ emoji, action: "error" });
@@ -205,8 +217,6 @@ const ImageModal = ({ image, onClose }) => {
     setIsCommentSubmitting(true);
 
     try {
-      const commentId = id();
-      const feedId = id();
       await db.transact([
         db.tx.comments[commentId].update({
           imageId,
@@ -228,6 +238,12 @@ const ImageModal = ({ image, onClose }) => {
       // Trigger global refresh to update feed immediately
       console.log("ImageModal: Added comment, triggering global refresh");
       triggerGlobalRefresh();
+      // Also trigger storage event as backup
+      localStorage.setItem('feed-refresh', Date.now().toString());
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: 'feed-refresh',
+        newValue: Date.now().toString()
+      }));
     } finally {
       setIsCommentSubmitting(false);
     }
@@ -248,6 +264,12 @@ const ImageModal = ({ image, onClose }) => {
     // Trigger global refresh to update feed immediately
     console.log("ImageModal: Deleted comment, triggering global refresh");
     triggerGlobalRefresh();
+    // Also trigger storage event as backup
+    localStorage.setItem('feed-refresh', Date.now().toString());
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'feed-refresh',
+      newValue: Date.now().toString()
+    }));
   };
 
   /* -------------------- ESC KEY -------------------- */

@@ -10,6 +10,7 @@ const Feed = () => {
   const [animatingItems, setAnimatingItems] = useState(new Set());
   const [connectionStatus, setConnectionStatus] = useState(getConnectionStatus());
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [manualRefresh, setManualRefresh] = useState(0);
   const previousItemsRef = useRef([]);
   const queryClient = useQueryClient();
 
@@ -19,18 +20,43 @@ const Feed = () => {
     return unsubscribe;
   }, []);
 
+  // Listen for global refresh triggers
+  useEffect(() => {
+    const unsubscribe = subscribeToGlobalRefresh(() => {
+      console.log("Feed: Received global refresh trigger, forcing refetch");
+      // Force refetch by changing the refresh trigger
+      setRefreshTrigger(prev => prev + 1);
+      // Also invalidate queries as backup
+      queryClient.invalidateQueries({ queryKey: ['instantdb'] });
+    });
+    return unsubscribe;
+  }, [queryClient]);
+
+  // Listen for storage events (backup communication mechanism)
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'feed-refresh') {
+        console.log("Feed: Received storage refresh event, forcing refetch");
+        setRefreshTrigger(prev => prev + 1);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
   // Aggressive polling fallback when offline
   useEffect(() => {
     if (connectionStatus === 'disconnected') {
-      console.log("Feed: Connection offline, setting up aggressive polling");
+      console.log("Feed: Connection offline, setting up ultra-aggressive polling");
       const interval = setInterval(() => {
-        console.log("Feed: Aggressive polling - invalidating queries");
-        queryClient.invalidateQueries({ queryKey: ['instantdb'] });
-      }, 2000); // Poll every 2 seconds when offline
+        console.log("Feed: Ultra-aggressive polling - forcing refetch");
+        setManualRefresh(prev => prev + 1);
+      }, 1000); // Poll every 1 second when offline
 
       return () => clearInterval(interval);
     }
-  }, [connectionStatus, queryClient]);
+  }, [connectionStatus]);
 
   /* -------------------- REAL-TIME FEED -------------------- */
   const { data, isLoading } = db.useQuery({
@@ -41,12 +67,12 @@ const Feed = () => {
       },
     },
   }, {
-    // Very aggressive polling when disconnected to ensure updates are seen
-    refetchInterval: connectionStatus === 'connected' ? 10000 : 1000, // 1 second polling when offline
+    // Ultra-aggressive polling when disconnected to ensure updates are seen
+    refetchInterval: connectionStatus === 'connected' ? 5000 : 500, // 0.5 second polling when offline
     // Force refresh when triggered
     refetchIntervalInBackground: false,
-    // Add timestamp to query key to force refetch on actions
-    queryKey: ['instantdb', 'feed', refreshTrigger],
+    // Add refresh triggers to query key to force refetch on actions
+    queryKey: ['instantdb', 'feed', refreshTrigger, manualRefresh],
   });
 
   const feedItems = useMemo(() => data?.feed || [], [data]);
@@ -166,7 +192,8 @@ const Feed = () => {
             <button
               onClick={() => {
                 console.log("Manual refresh triggered");
-                queryClient.invalidateQueries({ queryKey: ['instantdb', 'feed'] });
+                setManualRefresh(prev => prev + 1);
+                queryClient.invalidateQueries({ queryKey: ['instantdb'] });
               }}
               className="text-xs bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600"
               title="Refresh feed manually"
