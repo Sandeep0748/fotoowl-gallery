@@ -72,6 +72,43 @@ The app can be deployed to:
 
 Make sure to set environment variables in your deployment platform.
 
+### Deployment Troubleshooting
+
+#### Real-time Updates Not Working in Production
+
+If image interactions and comments don't update in the live feed after deployment:
+
+1. **Check Environment Variables**:
+   - Ensure `VITE_INSTANT_APP_ID` is set in your deployment platform
+   - Verify the App ID matches your InstantDB dashboard
+
+2. **WebSocket Connection Issues**:
+   - Some hosting platforms block WebSocket connections
+   - Check browser console for WebSocket connection errors
+   - Look for "InstantDB connection status" messages
+
+3. **Connection Status Indicators**:
+   - The app now shows connection status in the Feed header and Image Modal
+   - Green dot = Real-time connected
+   - Yellow dot = Connecting
+   - Red dot = Disconnected (falls back to polling)
+
+4. **Fallback Behavior**:
+   - When real-time fails, the app uses polling (every 5 seconds when disconnected)
+   - Manual refresh button appears when offline
+   - Data persistence still works even without real-time updates
+
+5. **Common Solutions**:
+   - **Vercel**: Ensure WebSocket support is enabled
+   - **Netlify**: Check if your plan supports WebSockets
+   - **Static Hosts**: Consider upgrading to a host with WebSocket support
+
+6. **Testing Real-time**:
+   - Open the app in two browser tabs
+   - Add a reaction/comment in one tab
+   - Check if it appears immediately in the other tab
+   - If delayed, check connection status indicators
+
 ## API Handling Strategy
 
 ### Unsplash API Integration

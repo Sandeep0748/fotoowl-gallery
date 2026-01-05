@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { db, id } from "../../services/instantdb";
+import { db, id, markActivity, getConnectionStatus, subscribeToConnectionStatus } from "../../services/instantdb";
 import { useUserStore } from "../../store/userStore";
 import EmojiPicker from "../EmojiPicker/EmojiPicker";
 import { getUserColor } from "../../utils/userColors";
@@ -11,9 +11,16 @@ const ImageModal = ({ image, onClose }) => {
   const [optimisticComments, setOptimisticComments] = useState([]);
   const [reactionFeedback, setReactionFeedback] = useState(null);
   const [isCommentSubmitting, setIsCommentSubmitting] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState(getConnectionStatus());
 
   const reactionLock = useRef(false);
   const imageId = String(image.id);
+
+  // Monitor connection status
+  useEffect(() => {
+    const unsubscribe = subscribeToConnectionStatus(setConnectionStatus);
+    return unsubscribe;
+  }, []);
 
   /* -------------------- QUERY -------------------- */
   const { data, isLoading } = db.useQuery({
@@ -31,6 +38,13 @@ const ImageModal = ({ image, onClose }) => {
   const reactions = useMemo(() => data?.reactions || [], [data]);
   const comments = useMemo(() => data?.comments || [], [data]);
   const feed = useMemo(() => data?.feed || [], [data]);
+
+  // Mark activity when real-time data updates
+  useEffect(() => {
+    if (reactions.length > 0 || comments.length > 0) {
+      markActivity();
+    }
+  }, [reactions.length, comments.length]);
 
   /* -------------------- REACTION GROUPING -------------------- */
   const reactionGroups = useMemo(() => {
@@ -226,8 +240,22 @@ const ImageModal = ({ image, onClose }) => {
         className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-4 border-b flex justify-between">
-          <h2 className="font-semibold text-lg">Image Details</h2>
+        <div className="p-4 border-b flex justify-between items-center">
+          <div>
+            <h2 className="font-semibold text-lg">Image Details</h2>
+            <div className="flex items-center gap-2 mt-1">
+              <div className={`w-2 h-2 rounded-full ${
+                connectionStatus === 'connected' ? 'bg-green-500' :
+                connectionStatus === 'connecting' ? 'bg-yellow-500' :
+                'bg-red-500'
+              }`}></div>
+              <span className="text-xs text-gray-500">
+                {connectionStatus === 'connected' ? 'Real-time active' :
+                 connectionStatus === 'connecting' ? 'Connecting...' :
+                 'Offline mode'}
+              </span>
+            </div>
+          </div>
           <button onClick={onClose} className="text-xl">×</button>
         </div>
 
@@ -290,9 +318,16 @@ const ImageModal = ({ image, onClose }) => {
 
           {/* COMMENTS */}
           <div className="space-y-3">
-            <h3 className="font-semibold">
-              Comments ({mergedComments.length})
-            </h3>
+            <div>
+              <h3 className="font-semibold">
+                Comments ({mergedComments.length})
+              </h3>
+              {connectionStatus === 'disconnected' && (
+                <p className="text-xs text-orange-600 mt-1">
+                  ⚠️ Offline mode - changes may not sync in real-time
+                </p>
+              )}
+            </div>
 
             <form onSubmit={addComment}>
               <textarea

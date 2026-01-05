@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { db } from "../../services/instantdb";
+import { db, markActivity, getConnectionStatus, subscribeToConnectionStatus } from "../../services/instantdb";
 import { getUserColor } from "../../utils/userColors";
 import { fetchImages } from "../../services/unsplash";
 import { useUserStore } from "../../store/userStore";
@@ -8,7 +8,14 @@ import { useMemo, useState, useEffect, useRef } from "react";
 const Feed = () => {
   const { setSelectedImage, userId } = useUserStore();
   const [animatingItems, setAnimatingItems] = useState(new Set());
+  const [connectionStatus, setConnectionStatus] = useState(getConnectionStatus());
   const previousItemsRef = useRef([]);
+
+  // Monitor connection status
+  useEffect(() => {
+    const unsubscribe = subscribeToConnectionStatus(setConnectionStatus);
+    return unsubscribe;
+  }, []);
 
   /* -------------------- REAL-TIME FEED -------------------- */
   const { data, isLoading } = db.useQuery({
@@ -19,7 +26,8 @@ const Feed = () => {
       },
     },
   }, {
-    refetchInterval: 5000, // Poll every 5 seconds as fallback for real-time issues
+    // More aggressive polling when disconnected, less when connected
+    refetchInterval: connectionStatus === 'connected' ? 30000 : 5000,
   });
 
   const feedItems = useMemo(() => data?.feed || [], [data]);
@@ -38,6 +46,11 @@ const Feed = () => {
       setTimeout(() => {
         setAnimatingItems(new Set());
       }, 500);
+    }
+    
+    // Mark activity when we receive new feed items (real-time updates)
+    if (newIds.length > 0) {
+      markActivity();
     }
     
     previousItemsRef.current = feedItems;
@@ -116,9 +129,31 @@ const Feed = () => {
       {/* HEADER */}
       <div className="px-4 py-3 border-b bg-white sticky top-0 z-10">
         <h2 className="text-lg font-semibold">Live Feed</h2>
-        <p className="text-xs text-gray-500">
-          Real-time image activity
-        </p>
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-gray-500">
+            Real-time image activity
+          </p>
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${
+              connectionStatus === 'connected' ? 'bg-green-500' :
+              connectionStatus === 'connecting' ? 'bg-yellow-500' :
+              'bg-red-500'
+            }`}></div>
+            <span className="text-xs text-gray-500">
+              {connectionStatus === 'connected' ? 'Live' :
+               connectionStatus === 'connecting' ? 'Connecting...' :
+               'Offline'}
+            </span>
+            {connectionStatus === 'disconnected' && (
+              <button
+                onClick={() => window.location.reload()}
+                className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
+              >
+                Refresh
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* FEED */}
