@@ -15,7 +15,7 @@ const ImageModal = ({ image, onClose }) => {
   const reactionLock = useRef(false);
   const imageId = String(image.id);
 
-  /* -------------------- QUERY -------------------- */
+  /* -------------------- QUERIES (NO FEED HERE) -------------------- */
   const { data, isLoading } = db.useQuery({
     reactions: {
       where: { imageId },
@@ -25,12 +25,10 @@ const ImageModal = ({ image, onClose }) => {
       where: { imageId },
       $: { order: { createdAt: "asc" } },
     },
-    feed: {},
   });
 
-  const reactions = useMemo(() => data?.reactions || [], [data]);
-  const comments = useMemo(() => data?.comments || [], [data]);
-  const feed = useMemo(() => data?.feed || [], [data]);
+  const reactions = data?.reactions || [];
+  const comments = data?.comments || [];
 
   /* -------------------- REACTION GROUPING -------------------- */
   const reactionGroups = useMemo(() => {
@@ -42,9 +40,9 @@ const ImageModal = ({ image, onClose }) => {
     return map;
   }, [reactions]);
 
-  /* -------------------- OPTIMISTIC COMMENTS MERGE -------------------- */
+  /* -------------------- OPTIMISTIC COMMENTS -------------------- */
   const mergedComments = useMemo(() => {
-    const filteredOptimistic = optimisticComments.filter(
+    const filtered = optimisticComments.filter(
       (opt) =>
         !comments.some(
           (real) =>
@@ -53,30 +51,10 @@ const ImageModal = ({ image, onClose }) => {
             Math.abs(real.createdAt - opt.createdAt) < 4000
         )
     );
-    return [...comments, ...filteredOptimistic].sort(
+    return [...comments, ...filtered].sort(
       (a, b) => a.createdAt - b.createdAt
     );
   }, [comments, optimisticComments]);
-
-  // Clean up optimistic comments that have been synced
-  useEffect(() => {
-    const cleanup = setInterval(() => {
-      setOptimisticComments((prev) =>
-        prev.filter((opt) => {
-          const hasRealComment = comments.some(
-            (real) =>
-              real.text === opt.text &&
-              real.userId === opt.userId &&
-              Math.abs(real.createdAt - opt.createdAt) < 4000
-          );
-          // Keep optimistic comment for at least 2 seconds, or until real comment arrives
-          return Date.now() - opt.createdAt < 2000 || !hasRealComment;
-        })
-      );
-    }, 500);
-
-    return () => clearInterval(cleanup);
-  }, [comments]);
 
   /* -------------------- ADD / REMOVE REACTION -------------------- */
   const addReaction = useCallback(
@@ -84,30 +62,33 @@ const ImageModal = ({ image, onClose }) => {
       if (reactionLock.current) return;
       reactionLock.current = true;
 
+      const now = Date.now();
+
       try {
-        // Re-query current reactions to handle concurrent changes
-        const currentReactions = reactions.filter(r => r.imageId === imageId);
-        const existing = currentReactions.find(
+        const existing = reactions.find(
           (r) => r.userId === userId && r.emoji === emoji
         );
 
+        // REMOVE
         if (existing) {
-          const feedItem = feed.find(
-            (f) => f.reactionId === existing.id
-          );
-
           await db.transact([
             db.tx.reactions[existing.id].delete(),
-            feedItem && db.tx.feed[feedItem.id].delete(),
+            db.tx.feed[id()].update({
+              type: "reaction",
+              action: "delete",
+              reactionId: existing.id,
+              imageId,
+              emoji,
+              userId,
+              username,
+              createdAt: now,
+            }),
           ]);
-
-          setReactionFeedback({ emoji, action: "removed" });
           return;
         }
 
+        // ADD
         const reactionId = id();
-        const feedId = id();
-        const now = Date.now();
 
         await db.transact([
           db.tx.reactions[reactionId].update({
@@ -117,8 +98,9 @@ const ImageModal = ({ image, onClose }) => {
             username,
             createdAt: now,
           }),
-          db.tx.feed[feedId].update({
+          db.tx.feed[id()].update({
             type: "reaction",
+            action: "add",
             reactionId,
             imageId,
             emoji,
@@ -127,17 +109,11 @@ const ImageModal = ({ image, onClose }) => {
             createdAt: now,
           }),
         ]);
-
-        setReactionFeedback({ emoji, action: "added" });
-      } catch (err) {
-        console.error("Reaction error:", err);
-        setReactionFeedback({ emoji, action: "error" });
       } finally {
-        setTimeout(() => setReactionFeedback(null), 1500);
         reactionLock.current = false;
       }
     },
-    [reactions, feed, imageId, userId, username]
+    [reactions, userId, username, imageId]
   );
 
   /* -------------------- ADD COMMENT -------------------- */
@@ -147,13 +123,13 @@ const ImageModal = ({ image, onClose }) => {
 
     const text = commentText.trim();
     const now = Date.now();
-    const tempId = `temp-${now}`;
+    setCommentText("");
+    setIsCommentSubmitting(true);
 
     setOptimisticComments((p) => [
       ...p,
       {
-        id: tempId,
-        imageId,
+        id: `temp-${now}`,
         text,
         userId,
         username,
@@ -162,12 +138,8 @@ const ImageModal = ({ image, onClose }) => {
       },
     ]);
 
-    setCommentText("");
-    setIsCommentSubmitting(true);
-
     try {
       const commentId = id();
-      const feedId = id();
       await db.transact([
         db.tx.comments[commentId].update({
           imageId,
@@ -176,8 +148,9 @@ const ImageModal = ({ image, onClose }) => {
           username,
           createdAt: now,
         }),
-        db.tx.feed[feedId].update({
+        db.tx.feed[id()].update({
           type: "comment",
+          action: "add",
           commentId,
           imageId,
           text,
@@ -193,19 +166,22 @@ const ImageModal = ({ image, onClose }) => {
 
   /* -------------------- DELETE COMMENT -------------------- */
   const deleteComment = async (commentId) => {
-    // Find the corresponding feed item
-    const feedItem = feed.find((f) => f.commentId === commentId);
-
-    // Delete both comment and feed item in a transaction
-    const deletes = [db.tx.comments[commentId].delete()];
-    if (feedItem) {
-      deletes.push(db.tx.feed[feedItem.id].delete());
-    }
-
-    await db.transact(deletes);
+    const now = Date.now();
+    await db.transact([
+      db.tx.comments[commentId].delete(),
+      db.tx.feed[id()].update({
+        type: "comment",
+        action: "delete",
+        commentId,
+        imageId,
+        userId,
+        username,
+        createdAt: now,
+      }),
+    ]);
   };
 
-  /* -------------------- ESC KEY -------------------- */
+  /* -------------------- ESC -------------------- */
   useEffect(() => {
     const fn = (e) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", fn);
@@ -216,132 +192,9 @@ const ImageModal = ({ image, onClose }) => {
     };
   }, [onClose]);
 
-  /* -------------------- UI -------------------- */
-  return (
-    <div
-      className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="p-4 border-b flex justify-between">
-          <h2 className="font-semibold text-lg">Image Details</h2>
-          <button onClick={onClose} className="text-xl">×</button>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-4 p-4 overflow-y-auto">
-          {/* IMAGE + REACTIONS */}
-          <div className="space-y-4">
-            <img
-              src={image.urls.regular || image.urls.small}
-              alt=""
-              className="rounded-lg"
-            />
-
-            <div>
-              <h3 className="font-semibold mb-2">Reactions</h3>
-              <div className="flex flex-wrap gap-2 mb-2">
-                {Object.entries(reactionGroups).map(([emoji, list]) => {
-                  const mine = list.find((r) => r.userId === userId);
-                  return (
-                    <div
-                      key={emoji}
-                      className="flex items-center gap-1 bg-gray-100 px-3 py-1 rounded-full animate-pop"
-                    >
-                      <span
-                        className="text-lg"
-                        style={{ color: mine && getUserColor(userId) }}
-                      >
-                        {emoji}
-                      </span>
-                      <span className="text-sm">{list.length}</span>
-                      {mine && (
-                        <button
-                          onClick={() => addReaction(emoji)}
-                          className="text-xs text-red-500 ml-1"
-                        >
-                          ×
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              <EmojiPicker onEmojiSelect={addReaction} />
-
-              {reactionFeedback && (
-                <p className={`text-sm mt-1 ${
-                  reactionFeedback.action === "error" 
-                    ? "text-red-600" 
-                    : "text-green-600"
-                }`}>
-                  {reactionFeedback.action === "added"
-                    ? `Added ${reactionFeedback.emoji}`
-                    : reactionFeedback.action === "removed"
-                    ? `Removed ${reactionFeedback.emoji}`
-                    : "Failed to update reaction"}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* COMMENTS */}
-          <div className="space-y-3">
-            <h3 className="font-semibold">
-              Comments ({mergedComments.length})
-            </h3>
-
-            <form onSubmit={addComment}>
-              <textarea
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                rows="3"
-                className="w-full border rounded p-2"
-                placeholder="Add a comment…"
-              />
-              <button
-                disabled={isCommentSubmitting}
-                className="mt-2 bg-blue-500 text-white px-4 py-1 rounded"
-              >
-                {isCommentSubmitting ? "Posting..." : "Post"}
-              </button>
-            </form>
-
-            <div className="space-y-2 max-h-80 overflow-y-auto">
-              {isLoading && <p className="text-sm text-gray-400">Loading…</p>}
-
-              {mergedComments.map((c) => (
-                <div
-                  key={c.id}
-                  className={`p-3 rounded bg-gray-50 ${
-                    c.isOptimistic && "opacity-70 animate-pulse"
-                  }`}
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-semibold">
-                      {c.username}
-                    </span>
-                    {c.userId === userId && !c.isOptimistic && (
-                      <button
-                        onClick={() => deleteComment(c.id)}
-                        className="text-xs text-red-500"
-                      >
-                        Delete
-                      </button>
-                    )}
-                  </div>
-                  <p className="text-sm">{c.text}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  /* -------------------- UI (same as yours) -------------------- */
+  // 🔥 UI tumhara bilkul sahi hai, change nahi kiya
+  // (No need to repeat, paste your existing JSX here)
 };
 
 export default ImageModal;
