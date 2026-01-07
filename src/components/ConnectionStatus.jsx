@@ -1,5 +1,8 @@
-import { useState, useEffect } from 'react';
-import { subscribeToConnectionStatus, getConnectionStatus } from '../services/instantdb';
+import { useState, useEffect } from "react";
+import {
+  subscribeToConnectionStatus,
+  getConnectionStatus,
+} from "../services/instantdb";
 
 const ConnectionStatus = () => {
   const [status, setStatus] = useState(getConnectionStatus());
@@ -10,26 +13,20 @@ const ConnectionStatus = () => {
   }, []);
 
   const getStatusColor = () => {
-    switch (status) {
-      case 'connected': return 'bg-green-500';
-      case 'connecting': return 'bg-yellow-500';
-      case 'disconnected': return 'bg-red-500';
-      default: return 'bg-gray-500';
-    }
+    if (status === "connected") return "bg-green-500";
+    if (status === "connecting") return "bg-yellow-500";
+    return "bg-gray-400";
   };
 
   const getStatusText = () => {
-    switch (status) {
-      case 'connected': return 'Real-time connected';
-      case 'connecting': return 'Connecting...';
-      case 'disconnected': return 'Disconnected';
-      default: return 'Unknown';
-    }
+    if (status === "connected") return "Real-time connected";
+    if (status === "connecting") return "Connecting…";
+    return "";
   };
 
   return (
     <div className="flex items-center gap-2 px-3 py-1 text-xs text-gray-600">
-      <div className={`w-2 h-2 rounded-full ${getStatusColor()}`}></div>
+      <div className={`w-2 h-2 rounded-full ${getStatusColor()}`} />
       <span>{getStatusText()}</span>
     </div>
   );
