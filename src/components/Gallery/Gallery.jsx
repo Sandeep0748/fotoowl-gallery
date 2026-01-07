@@ -2,7 +2,6 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useCallback } from "react";
 import { fetchImages } from "../../services/unsplash";
 import ImageCard from "../Gallery/ImageCard";
-// import ImageCard from "../Gallery/IMageCard";
 import ImageModal from "./ImageModal";
 import { useUserStore } from "../../store/userStore";
 
@@ -16,7 +15,7 @@ const Gallery = () => {
 
   const observerRef = useRef(null);
 
-  /* -------------------- QUERY -------------------- */
+  // QUERY
   const {
     data,
     fetchNextPage,
@@ -34,7 +33,7 @@ const Gallery = () => {
 
   const images = data?.pages.flat() ?? [];
 
-  /* -------------------- INFINITE SCROLL -------------------- */
+  // INFINITE SCROLL
   const lastImageRef = useCallback(
     (node) => {
       if (isFetchingNextPage) return;
@@ -56,7 +55,7 @@ const Gallery = () => {
     return () => observerRef.current?.disconnect();
   }, []);
 
-  /* -------------------- STATES -------------------- */
+  // STATES
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full text-gray-500">
@@ -73,7 +72,7 @@ const Gallery = () => {
     );
   }
 
-  /* -------------------- UI -------------------- */
+  // UI
   return (
     <>
       <div className="p-6 h-full overflow-y-auto">

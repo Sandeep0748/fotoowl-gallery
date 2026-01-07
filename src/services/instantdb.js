@@ -34,14 +34,14 @@ const updateConnectionStatus = (status) => {
   }
 };
 
-/* ---------------- ACTIVITY TRACKING ---------------- */
+// ACTIVITY TRACKING
 
 // Call this whenever real-time data is received
 export const markActivity = () => {
   updateConnectionStatus("connected");
 };
 
-/* ---------------- GLOBAL REFRESH ---------------- */
+// GLOBAL REFRESH
 
 let refreshListeners = new Set();
 
@@ -61,7 +61,7 @@ export const subscribeToGlobalRefresh = (callback) => {
   return () => refreshListeners.delete(callback);
 };
 
-/* ---------------- INIT ---------------- */
+// INIT
 
 if (appId) {
   updateConnectionStatus("connecting");

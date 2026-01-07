@@ -22,7 +22,7 @@ const ImageModal = ({ image, onClose }) => {
     return unsubscribe;
   }, []);
 
-  /* -------------------- QUERY -------------------- */
+  // QUERY
   const { data, isLoading } = db.useQuery({
     reactions: {
       where: { imageId },
@@ -46,7 +46,7 @@ const ImageModal = ({ image, onClose }) => {
     }
   }, [reactions.length, comments.length]);
 
-  /* -------------------- REACTION GROUPING -------------------- */
+  // REACTION GROUPING
   const reactionGroups = useMemo(() => {
     const map = {};
     reactions.forEach((r) => {
@@ -56,7 +56,7 @@ const ImageModal = ({ image, onClose }) => {
     return map;
   }, [reactions]);
 
-  /* -------------------- OPTIMISTIC COMMENTS MERGE -------------------- */
+  // OPTIMISTIC COMMENTS MERGE
   const mergedComments = useMemo(() => {
     const filteredOptimistic = optimisticComments.filter(
       (opt) =>
@@ -92,7 +92,7 @@ const ImageModal = ({ image, onClose }) => {
     return () => clearInterval(cleanup);
   }, [comments]);
 
-  /* -------------------- ADD / REMOVE REACTION -------------------- */
+  // ADD / REMOVE REACTION
   const addReaction = useCallback(
     async (emoji) => {
       if (reactionLock.current) return;
@@ -172,7 +172,7 @@ const ImageModal = ({ image, onClose }) => {
     [reactions, feed, imageId, userId, username]
   );
 
-  /* -------------------- ADD COMMENT -------------------- */
+  // ADD COMMENT
   const addComment = async (e) => {
     e.preventDefault();
     if (!commentText.trim() || isCommentSubmitting) return;
@@ -232,7 +232,7 @@ const ImageModal = ({ image, onClose }) => {
     }
   };
 
-  /* -------------------- DELETE COMMENT -------------------- */
+  // DELETE COMMENT
   const deleteComment = async (commentId) => {
     // Find the corresponding feed item
     const feedItem = feed.find((f) => f.commentId === commentId);
@@ -255,7 +255,7 @@ const ImageModal = ({ image, onClose }) => {
     }));
   };
 
-  /* -------------------- ESC KEY -------------------- */
+  // ESC KEY
   useEffect(() => {
     const fn = (e) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", fn);
@@ -266,7 +266,7 @@ const ImageModal = ({ image, onClose }) => {
     };
   }, [onClose]);
 
-  /* -------------------- UI -------------------- */
+  // UI
   return (
     <div
       className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"

@@ -20,13 +20,13 @@ const Feed = () => {
   const previousItemsRef = useRef([]);
   const queryClient = useQueryClient();
 
-  /* ---------------- CONNECTION STATUS ---------------- */
+  // CONNECTION STATUS
   useEffect(() => {
     const unsubscribe = subscribeToConnectionStatus(setConnectionStatus);
     return unsubscribe;
   }, []);
 
-  /* ---------------- GLOBAL REFRESH ---------------- */
+  // GLOBAL REFRESH
   useEffect(() => {
     const unsubscribe = subscribeToGlobalRefresh(() => {
       console.log("Feed: Global refresh");
@@ -35,7 +35,7 @@ const Feed = () => {
     return unsubscribe;
   }, [queryClient]);
 
-  /* ---------------- REAL-TIME FEED ---------------- */
+  // REAL-TIME FEED
   const { data, isLoading } = db.useQuery({
     feed: {},
   });
@@ -47,7 +47,7 @@ const Feed = () => {
       .slice(0, 50);
   }, [data]);
 
-  /* ---------------- NEW ITEM ANIMATION ---------------- */
+  // NEW ITEM ANIMATION
   useEffect(() => {
     const previousIds = new Set(
       previousItemsRef.current.map((item) => item.id)
@@ -69,7 +69,7 @@ const Feed = () => {
     previousItemsRef.current = feedItems;
   }, [feedItems]);
 
-  /* ---------------- IMAGE CACHE ---------------- */
+  // IMAGE CACHE
   const { data: imagesData } = useQuery({
     queryKey: ["images", "feed-cache"],
     queryFn: async () => {
@@ -89,7 +89,7 @@ const Feed = () => {
     [imagesData]
   );
 
-  /* ---------------- HANDLERS ---------------- */
+  // HANDLERS
   const handleFeedItemClick = (item) => {
     if (!item.imageId) return;
     const image = imagesMap.get(String(item.imageId));
@@ -129,7 +129,7 @@ const Feed = () => {
     return null;
   };
 
-  /* ---------------- UI ---------------- */
+  // UI
   return (
     <div className="h-full flex flex-col bg-gray-50">
       {/* HEADER */}

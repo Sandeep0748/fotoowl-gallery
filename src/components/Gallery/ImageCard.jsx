@@ -14,7 +14,7 @@ const ImageCard = ({ image, onImageClick }) => {
 
   const imageId = String(image.id);
 
-  /* -------------------- QUERY -------------------- */
+  // QUERY
   const { data, isLoading, error } = db.useQuery({
     reactions: {
       where: { imageId },
@@ -30,7 +30,7 @@ const ImageCard = ({ image, onImageClick }) => {
   const reactions = useMemo(() => data?.reactions || [], [data]);
   const feed = useMemo(() => data?.feed || [], [data]);
 
-  /* -------------------- GROUP REACTIONS -------------------- */
+  // GROUP REACTIONS
   const reactionGroups = useMemo(() => {
     const groups = {};
     reactions.forEach((r) => {
@@ -40,7 +40,7 @@ const ImageCard = ({ image, onImageClick }) => {
     return groups;
   }, [reactions]);
 
-  /* -------------------- ADD / REMOVE REACTION -------------------- */
+  // ADD / REMOVE REACTION
   const addReaction = useCallback(
     async (emoji) => {
       if (reactionLock.current) return;
@@ -100,12 +100,12 @@ const ImageCard = ({ image, onImageClick }) => {
     [reactions, feed, userId, username, imageId]
   );
 
-  /* -------------------- TOP EMOJIS -------------------- */
+  // TOP EMOJIS
   const topEmojis = Object.entries(reactionGroups)
     .sort((a, b) => b[1].length - a[1].length)
     .slice(0, 3);
 
-  /* -------------------- UI -------------------- */
+  // UI
   return (
     <div className="group rounded-xl overflow-hidden bg-white border border-gray-200 shadow-sm hover:shadow-xl transition-all duration-300">
       

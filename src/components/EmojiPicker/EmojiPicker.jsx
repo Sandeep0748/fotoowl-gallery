@@ -10,7 +10,7 @@ const EmojiPicker = ({ onEmojiSelect, className = "" }) => {
   const [isOpen, setIsOpen] = useState(false);
   const pickerRef = useRef(null);
 
-  /* -------------------- CLOSE HANDLERS -------------------- */
+  // CLOSE HANDLERS
   const closePicker = useCallback(() => {
     setIsOpen(false);
   }, []);
@@ -39,13 +39,13 @@ const EmojiPicker = ({ onEmojiSelect, className = "" }) => {
     };
   }, [isOpen, closePicker]);
 
-  /* -------------------- EMOJI CLICK -------------------- */
+  // EMOJI CLICK
   const handleEmojiClick = (emoji) => {
     onEmojiSelect?.(emoji);
     closePicker();
   };
 
-  /* -------------------- UI -------------------- */
+  // UI
   return (
     <div ref={pickerRef} className={`relative inline-block ${className}`}>
       {/* TOGGLE BUTTON */}
